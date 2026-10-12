@@ -465,7 +465,7 @@ class Reanimation extends FlxSprite {
 
 				var frame = graphicToDraw.imageFrame.frame;
 				if (frame != null) {
-					camera.drawPixels(frame, graphicToDraw.bitmap, drawMat, colorTransform, blend, clipRect, shader);
+					camera.drawPixels(frame, graphicToDraw.bitmap, drawMat, colorTransform, blend, clipRect, antialiasing, shader);
 				}
 			}
 		}
