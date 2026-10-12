@@ -461,9 +461,7 @@ class Reanimation extends FlxSprite {
 				if (!camera.visible || !camera.exists)
 					continue;
 
-				var drawMat = mat.clone();
-				drawMat.tx += x - camera.scroll.x * scrollFactor.x;
-				drawMat.ty += y - camera.scroll.y * scrollFactor.y;
+				var drawMat = new flixel.math.FlxMatrix(mat.a, mat.b, mat.c, mat.d, mat.tx + x - camera.scroll.x * scrollFactor.x, mat.ty + y - camera.scroll.y * scrollFactor.y);
 
 				var frame = graphicToDraw.imageFrame.frame;
 				if (frame != null) {
