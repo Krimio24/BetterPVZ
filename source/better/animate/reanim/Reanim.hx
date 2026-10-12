@@ -199,14 +199,14 @@ class ReanimAtlas {
 }
 
 class ReanimatorTransform {
-	public var mTransX:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mTransY:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mSkewX:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mSkewY:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mScaleX:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mScaleY:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mFrame:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
-	public var mAlpha:Float = ReanimConstants.DEFAULT_FIELD_PLACEHOLDER;
+	public var mTransX:Float = 0.0;
+	public var mTransY:Float = 0.0;
+	public var mSkewX:Float = 0.0;
+	public var mSkewY:Float = 0.0;
+	public var mScaleX:Float = 1.0;
+	public var mScaleY:Float = 1.0;
+	public var mFrame:Float = 0.0;
+	public var mAlpha:Float = 1.0;
 	public var mGraphic:FlxGraphic = null;
 	public var mFontName:String = "";
 	public var mText:String = "";
@@ -309,23 +309,38 @@ class Reanimation extends FlxSprite {
 
 	public function reanimationInitialize(theX:Float, theY:Float, theDefinition:ReanimatorDefinition):Void {
 		mDead = false;
-		setPosition(theX, theY);
 		mDefinition = theDefinition;
-		mAnimRate = theDefinition.mFPS;
+		mAnimRate = (theDefinition != null) ? theDefinition.mFPS : 12.0;
 		mLastFrameTime = -1.0;
 
-		if (theDefinition.mTrackCount != 0) {
-			mFrameCount = mDefinition.mTracks[0].mTransformCount;
-			mTrackInstances = [for (i in 0...mDefinition.mTrackCount) new ReanimatorTrackInstance()];
+		if (theDefinition != null && theDefinition.mTrackCount != 0) {
+			mFrameCount = theDefinition.mTracks[0].mTransformCount;
+			mTrackInstances = [for (i in 0...theDefinition.mTrackCount) new ReanimatorTrackInstance()];
 		} else {
 			mFrameCount = 0;
+			mTrackInstances = [];
 		}
+
+		var maxW:Float = 0;
+		var maxH:Float = 0;
+		if (mDefinition != null) {
+			for (track in mDefinition.mTracks) {
+				for (t in track.mTransforms) {
+					if (t.mGraphic != null) {
+						if (t.mGraphic.width > maxW) maxW = t.mGraphic.width;
+						if (t.mGraphic.height > maxH) maxH = t.mGraphic.height;
+					}
+				}
+			}
+		}
+		this.width = maxW > 0 ? maxW : 100;
+		this.height = maxH > 0 ? maxH : 100;
+
+		setPosition(theX, theY);
 	}
 
 	override public function setPosition(theX:Float = 0, theY:Float = 0):Void {
 		super.setPosition(theX, theY);
-		mOverlayMatrix.tx = theX;
-		mOverlayMatrix.ty = theY;
 	}
 
 	public function overrideScale(theScaleX:Float, theScaleY:Float):Void {
@@ -340,7 +355,7 @@ class Reanimation extends FlxSprite {
 	override public function update(elapsed:Float):Void {
 		super.update(elapsed);
 
-		if (mFrameCount == 0 || mDead)
+		if (mFrameCount == 0 || mDead || mDefinition == null)
 			return;
 
 		mLastFrameTime = mAnimTime;
@@ -388,6 +403,8 @@ class Reanimation extends FlxSprite {
 
 		for (i in 0...mDefinition.mTrackCount) {
 			var trackInst = mTrackInstances[i];
+			if (trackInst == null) continue;
+
 			if (trackInst.mBlendCounter > 0)
 				trackInst.mBlendCounter--;
 
@@ -396,7 +413,7 @@ class Reanimation extends FlxSprite {
 				trackInst.mShakeY = (FlxG.random.float(-1.0, 1.0)) * trackInst.mShakeOverride;
 			}
 
-			if (StringTools.startsWith(mDefinition.mTracks[i].mName.toLowerCase(), "attacher__")) {
+			if (mDefinition.mTracks[i] != null && StringTools.startsWith(mDefinition.mTracks[i].mName.toLowerCase(), "attacher__")) {
 				updateAttacherTrack(i);
 			}
 		}
@@ -413,7 +430,7 @@ class Reanimation extends FlxSprite {
 
 		for (i in 0...mDefinition.mTrackCount) {
 			var trackInst = mTrackInstances[i];
-			if (trackInst.mRenderGroup == ReanimConstants.RENDER_GROUP_HIDDEN)
+			if (trackInst == null || trackInst.mRenderGroup == ReanimConstants.RENDER_GROUP_HIDDEN)
 				continue;
 
 			getTransformAtTime(i, transform, frameTime);
@@ -422,24 +439,34 @@ class Reanimation extends FlxSprite {
 			if (graphicToDraw == null || transform.mFrame < 0 || transform.mAlpha <= 0)
 				continue;
 
-
 			var skewXRad = transform.mSkewX * (Math.PI / 180.0);
 			var skewYRad = transform.mSkewY * (Math.PI / 180.0);
 
-			
 			var a = Math.cos(skewXRad) * transform.mScaleX;
 			var b = Math.sin(skewXRad) * transform.mScaleX;
 			var c = -Math.sin(skewYRad) * transform.mScaleY;
 			var d = Math.cos(skewYRad) * transform.mScaleY;
 
-			var mat = new flixel.math.FlxMatrix(a, b, c, d, transform.mTransX, transform.mTransY);
-			mat.translate(transform.mTransX + trackInst.mShakeX, transform.mTransY + trackInst.mShakeY);
+			var tx = transform.mTransX + trackInst.mShakeX;
+			var ty = transform.mTransY + trackInst.mShakeY;
+
+			var mat = new flixel.math.FlxMatrix(a, b, c, d, tx, ty);
 			mat.concat(mOverlayMatrix);
+
+			var drawAlpha = alpha * transform.mAlpha;
+			if (drawAlpha <= 0)
+				continue;
 
 			for (camera in getCameras()) {
 				if (!camera.visible || !camera.exists)
 					continue;
-				camera.drawPixels(null, graphicToDraw.bitmap, mat, null, null, false);
+
+				var drawMat = new flixel.math.FlxMatrix(mat.a, mat.b, mat.c, mat.d, mat.tx + x - camera.scroll.x * scrollFactor.x, mat.ty + y - camera.scroll.y * scrollFactor.y);
+
+				var frame = graphicToDraw.imageFrame.frame;
+				if (frame != null) {
+					camera.drawPixels(frame, graphicToDraw.bitmap, drawMat, colorTransform, blend, clipRect, antialiasing, shader);
+				}
 			}
 		}
 	}
@@ -447,8 +474,9 @@ class Reanimation extends FlxSprite {
 	public function getFrameTime(theFrameTime:ReanimatorFrameTime):Void {
 		var aFrameCount = (mLoopType == REANIM_PLAY_ONCE_FULL_LAST_FRAME
 			|| mLoopType == REANIM_LOOP_FULL_LAST_FRAME
-			|| mLoopType == REANIM_PLAY_ONCE_FULL_LAST_FRAME_AND_HOLD) ? mFrameCount : mFrameCount
-			- 1;
+			|| mLoopType == REANIM_PLAY_ONCE_FULL_LAST_FRAME_AND_HOLD) ? mFrameCount : mFrameCount - 1;
+
+		if (aFrameCount <= 0) aFrameCount = 1;
 
 		var aAnimPosition = mFrameStart + mAnimTime * aFrameCount;
 		var aAnimFrameBefore = Math.floor(aAnimPosition);
@@ -465,9 +493,18 @@ class Reanimation extends FlxSprite {
 	}
 
 	public function getTransformAtTime(theTrackIndex:Int, theTransform:ReanimatorTransform, theFrameTime:ReanimatorFrameTime):Void {
+		if (mDefinition == null || theTrackIndex < 0 || theTrackIndex >= mDefinition.mTracks.length)
+			return;
+
 		var aTrack = mDefinition.mTracks[theTrackIndex];
-		var aTransBefore = aTrack.mTransforms[theFrameTime.mAnimFrameBeforeInt];
-		var aTransAfter = aTrack.mTransforms[theFrameTime.mAnimFrameAfterInt];
+		if (aTrack == null || aTrack.mTransforms.length == 0)
+			return;
+
+		var beforeIdx = Std.int(Math.max(0, Math.min(aTrack.mTransforms.length - 1, theFrameTime.mAnimFrameBeforeInt)));
+		var afterIdx = Std.int(Math.max(0, Math.min(aTrack.mTransforms.length - 1, theFrameTime.mAnimFrameAfterInt)));
+
+		var aTransBefore = aTrack.mTransforms[beforeIdx];
+		var aTransAfter = aTrack.mTransforms[afterIdx];
 
 		theTransform.mTransX = floatLerp(aTransBefore.mTransX, aTransAfter.mTransX, theFrameTime.mFraction);
 		theTransform.mTransY = floatLerp(aTransBefore.mTransY, aTransAfter.mTransY, theFrameTime.mFraction);
@@ -476,13 +513,14 @@ class Reanimation extends FlxSprite {
 		theTransform.mScaleX = floatLerp(aTransBefore.mScaleX, aTransAfter.mScaleX, theFrameTime.mFraction);
 		theTransform.mScaleY = floatLerp(aTransBefore.mScaleY, aTransAfter.mScaleY, theFrameTime.mFraction);
 		theTransform.mAlpha = floatLerp(aTransBefore.mAlpha, aTransAfter.mAlpha, theFrameTime.mFraction);
-		theTransform.mGraphic = aTransBefore.mGraphic;
+		theTransform.mGraphic = aTransBefore.mGraphic != null ? aTransBefore.mGraphic : aTransAfter.mGraphic;
 		theTransform.mFontName = aTransBefore.mFontName;
 		theTransform.mText = aTransBefore.mText;
 
 		if (aTransBefore.mFrame != -1.0
 			&& aTransAfter.mFrame == -1.0
 			&& theFrameTime.mFraction > 0.0
+			&& mTrackInstances[theTrackIndex] != null
 			&& mTrackInstances[theTrackIndex].mTruncateDisappearingFrames) {
 			theTransform.mFrame = -1.0;
 		} else {
@@ -496,7 +534,7 @@ class Reanimation extends FlxSprite {
 		getTransformAtTime(theTrackIndex, theTransformCurrent, ft);
 
 		var aTrack = mTrackInstances[theTrackIndex];
-		if (Math.round(theTransformCurrent.mFrame) >= 0 && aTrack.mBlendCounter > 0) {
+		if (aTrack != null && Math.round(theTransformCurrent.mFrame) >= 0 && aTrack.mBlendCounter > 0) {
 			var aBlendFactor = aTrack.mBlendCounter / aTrack.mBlendTime;
 			blendTransform(theTransformCurrent, theTransformCurrent, aTrack.mBlendTransform, aBlendFactor);
 		}
@@ -514,13 +552,13 @@ class Reanimation extends FlxSprite {
 		var aSkewY2 = theTransform2.mSkewY;
 
 		while (aSkewX2 > theTransform1.mSkewX + 180.0)
-			aSkewX2 = theTransform1.mSkewX;
+			aSkewX2 -= 360.0;
 		while (aSkewX2 < theTransform1.mSkewX - 180.0)
-			aSkewX2 = theTransform1.mSkewX;
+			aSkewX2 += 360.0;
 		while (aSkewY2 > theTransform1.mSkewY + 180.0)
-			aSkewY2 = theTransform1.mSkewY;
+			aSkewY2 -= 360.0;
 		while (aSkewY2 < theTransform1.mSkewY - 180.0)
-			aSkewY2 = theTransform1.mSkewY;
+			aSkewY2 += 360.0;
 
 		theResult.mSkewX = floatLerp(theTransform1.mSkewX, aSkewX2, theBlendFactor);
 		theResult.mSkewY = floatLerp(theTransform1.mSkewY, aSkewY2, theBlendFactor);
@@ -531,8 +569,9 @@ class Reanimation extends FlxSprite {
 	}
 
 	public function findTrackIndex(theTrackName:String):Int {
+		if (mDefinition == null) return 0;
 		for (i in 0...mDefinition.mTrackCount) {
-			if (mDefinition.mTracks[i].mName.toLowerCase() == theTrackName.toLowerCase())
+			if (mDefinition.mTracks[i] != null && mDefinition.mTracks[i].mName.toLowerCase() == theTrackName.toLowerCase())
 				return i;
 		}
 		return 0;
@@ -554,23 +593,26 @@ class Reanimation extends FlxSprite {
 	}
 
 	public function startBlend(theBlendTime:Int):Void {
+		if (mDefinition == null) return;
 		for (i in 0...mDefinition.mTrackCount) {
 			var aTransform = new ReanimatorTransform();
 			getCurrentTransform(i, aTransform);
-			if (Math.round(aTransform.mFrame) >= 0) {
+			if (Math.round(aTransform.mFrame) >= 0 && i < mTrackInstances.length) {
 				var inst = mTrackInstances[i];
-				inst.mBlendTransform = aTransform;
-				inst.mBlendTime = theBlendTime;
-				inst.mBlendCounter = theBlendTime;
-				inst.mBlendTransform.mFontName = "";
-				inst.mBlendTransform.mText = "";
-				inst.mBlendTransform.mGraphic = null;
+				if (inst != null) {
+					inst.mBlendTransform = aTransform;
+					inst.mBlendTime = theBlendTime;
+					inst.mBlendCounter = theBlendTime;
+					inst.mBlendTransform.mFontName = "";
+					inst.mBlendTransform.mText = "";
+					inst.mBlendTransform.mGraphic = null;
+				}
 			}
 		}
 	}
 
 	public function getFramesForLayer(theTrackName:String, outFrames:{start:Int, count:Int}):Void {
-		if (mDefinition.mTrackCount == 0) {
+		if (mDefinition == null || mDefinition.mTrackCount == 0) {
 			outFrames.start = 0;
 			outFrames.count = 0;
 			return;
@@ -581,14 +623,16 @@ class Reanimation extends FlxSprite {
 		outFrames.start = 0;
 		outFrames.count = 1;
 
+		if (aTrack == null) return;
+
 		for (i in 0...aTrack.mTransformCount) {
-			if (aTrack.mTransforms[i].mFrame >= 0.0) {
+			if (aTrack.mTransforms[i] != null && aTrack.mTransforms[i].mFrame >= 0.0) {
 				outFrames.start = i;
 				break;
 			}
 		}
 		for (j in outFrames.start...aTrack.mTransformCount) {
-			if (aTrack.mTransforms[j].mFrame >= 0.0) {
+			if (aTrack.mTransforms[j] != null && aTrack.mTransforms[j].mFrame >= 0.0) {
 				outFrames.count = j - outFrames.start + 1;
 			}
 		}

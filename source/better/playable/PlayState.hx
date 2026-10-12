@@ -72,9 +72,13 @@ class PlayState extends FlxState {
 			if (params.lawnID == "roof")
 				lawn.buildLawn();
 
-			lawn.screenCenter();
-			lawn.y += 180;
-			lawn.x += 20;
+			if (params.lawnID == "roof") {
+				lawn.setPosition(0, 0);
+			} else {
+				lawn.screenCenter();
+				lawn.y += 180;
+				lawn.x += 20;
+			}
 
 			add(lawn);
 		}

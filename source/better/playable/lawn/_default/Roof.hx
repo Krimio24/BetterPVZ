@@ -84,7 +84,6 @@ class Roof extends Lawn {
 		bg.screenCenter();
 
 		bg.camera = PlayState.camGame;
-		bg.y += 200;
 
 		add(bg);
 

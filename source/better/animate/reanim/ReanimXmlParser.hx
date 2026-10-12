@@ -20,10 +20,8 @@ class ReanimXmlParser {
 
 			for (tNode in trackNode.nodes.t) {
 				var prev:ReanimatorTransform = parsedFrames.length > 0 ? parsedFrames[parsedFrames.length - 1] : null;
-
 				var trans = new ReanimatorTransform();
 
-				// Copiar valores del frame anterior si existen
 				if (prev != null) {
 					trans.mTransX = prev.mTransX;
 					trans.mTransY = prev.mTransY;
@@ -34,9 +32,18 @@ class ReanimXmlParser {
 					trans.mAlpha = prev.mAlpha;
 					trans.mFrame = prev.mFrame;
 					trans.mGraphic = prev.mGraphic;
+				} else {
+					trans.mTransX = 0.0;
+					trans.mTransY = 0.0;
+					trans.mSkewX = 0.0;
+					trans.mSkewY = 0.0;
+					trans.mScaleX = 1.0;
+					trans.mScaleY = 1.0;
+					trans.mAlpha = 1.0;
+					trans.mFrame = 0.0;
+					trans.mGraphic = null;
 				}
 
-				// Sobrescribir si el nodo <t> actual los define
 				if (tNode.hasNode.x)
 					trans.mTransX = Std.parseFloat(tNode.node.x.innerData);
 				if (tNode.hasNode.y)
@@ -54,7 +61,6 @@ class ReanimXmlParser {
 				if (tNode.hasNode.f)
 					trans.mFrame = Std.parseFloat(tNode.node.f.innerData);
 
-				// Si el nodo actual define una imagen <i>, la resolvemos directamente
 				if (tNode.hasNode.i) {
 					var imgId:String = tNode.node.i.innerData;
 					trans.mGraphic = resolveGraphicFromMap(imgId, imageMap);
@@ -66,15 +72,17 @@ class ReanimXmlParser {
 			var track = new ReanimatorTrack();
 			track.mName = trackNode.hasNode.name ? trackNode.node.name.innerData : "";
 			track.mTransforms = parsedFrames;
+			track.mTransformCount = parsedFrames.length;
 
 			parsedTracks.push(track);
 		}
 
-		var fpsVal:Int = xml.hasNode.fps ? Std.parseInt(xml.node.fps.innerData) : 12;
+		var fpsVal:Float = xml.hasNode.fps ? Std.parseFloat(xml.node.fps.innerData) : 12.0;
 
 		var def = new ReanimatorDefinition();
 		def.mFPS = fpsVal;
 		def.mTracks = parsedTracks;
+		def.mTrackCount = parsedTracks.length;
 
 		return def;
 	}
@@ -85,10 +93,21 @@ class ReanimXmlParser {
 
 		for (entry in map) {
 			if (entry.id == imageId) {
-				var fullPath:String = "assets/images/reanim/" + entry.path;
-				if (openfl.utils.Assets.exists(fullPath)) {
-					return FlxG.bitmap.add(fullPath);
+				var candidatePaths:Array<String> = [
+					entry.path,
+					"assets/images/reanim/" + entry.path,
+					"assets/reanim/" + entry.path,
+					"assets/images/" + entry.path,
+					"assets/" + entry.path
+				];
+				for (path in candidatePaths) {
+					if (openfl.utils.Assets.exists(path)) {
+						return FlxG.bitmap.add(path);
+					}
 				}
+				try {
+					return FlxG.bitmap.add("assets/images/reanim/" + entry.path);
+				} catch (e:Dynamic) {}
 				break;
 			}
 		}
